@@ -10,19 +10,20 @@
 
 # Display help message
 show_help() {
-    echo "Usage: $0 [density] [character] [color code] [speed]"
+    echo "Usage: $0 [density] [characters] [color code] [speed]"
     echo "  density     : Set the density of the raindrops (default 3)."
-    echo "  character   : Choose the raindrop character (default '/')."
+    echo "  characters  : Characters to use as raindrops (default '/')."
     echo "  color code  : ANSI color code for the raindrop (default 37 for white)."
     echo "  speed       : Choose speed from 1 (slowest) to 5 (fastest)."
     echo
-    echo "Example: $0 5 '@' 32 3"
+    echo "Example: $0 5 '/@|' 32 3"
 }
 
 # Function to clear the screen and hide the cursor
 initialize_screen() {
     clear
     tput civis  # Hide cursor
+    stty -echo  # Turn off key echo
     height=$(tput lines)
     width=$(tput cols)
 }
@@ -30,36 +31,59 @@ initialize_screen() {
 # Declare an associative array to hold the active raindrops
 declare -A raindrops
 
-# Function to place a raindrop at a random position
+# Function to place raindrops based on density and characters
 place_raindrop() {
-    local x=$((RANDOM % width))
-    local speed=$((RANDOM % (5 - speed_range + 1) + 1))  # Speed adjustments
-    raindrops[$x]=0,$speed
+    local chars=($rain_char) # Split characters into an array
+    for ((i=0; i<density; i++)); do
+        for ch in "${chars[@]}"; do
+            local x=$((RANDOM % width))
+            local speed=$((RANDOM % speed_range + 1))
+            raindrops["$x,0,$ch"]=$speed  # Store character with its speed at initial position
+        done
+    done
 }
 
 # Function to move raindrops
 move_raindrops() {
-    clear  # Always clear the screen for each frame
+    declare -A new_positions
+    # Buffer output for efficiency
+    local buffer=""
 
-    # Place new raindrops randomly based on specified density
-    for ((i=0; i<density; i++)); do
-        place_raindrop
-    done
+    # Process each raindrop to update or remove
+    for pos in "${!raindrops[@]}"; do
+        IFS=',' read -r x y ch <<< "$pos"
+        local speed=${raindrops[$pos]}
+        local newY=$((y + speed))
+        
+        # Erase the current position by printing a space
+        buffer+="\e[${y};${x}H "
 
-    # Print the raindrops and update their positions
-    for x in "${!raindrops[@]}"; do
-        IFS=, read y speed <<< "${raindrops[$x]}"
-        tput cup $y $x
-        echo -en "\e[${color}m${rain_char}\e[0m"  # Use specified color and character
-
-        # Increment the raindrop down at its speed rate
-        if ((y + speed < height)); then
-            raindrops[$x]=$((y + speed)),$speed
-        else
-            unset raindrops[$x]  # Remove the raindrop if it reaches the bottom
+        # Update or remove the raindrop
+        if [ $newY -lt $height ]; then
+            buffer+="\e[${newY};${x}H\e[${color}m${ch}\e[0m"
+            new_positions["$x,$newY,$ch"]=$speed
         fi
     done
+
+    # Update raindrops with new positions
+    raindrops=()
+    for k in "${!new_positions[@]}"; do
+        raindrops["$k"]=${new_positions["$k"]}
+    done
+
+    # Output the buffer
+    echo -ne "$buffer"
 }
+
+# Function to reset terminal settings on exit
+cleanup() {
+    tput cnorm  # Show cursor
+    stty echo   # Turn on key echo
+    clear
+}
+
+# Handle user interruption
+trap cleanup SIGINT SIGTERM EXIT
 
 # Check if help is requested
 if [[ "$1" == "-h" || "$1" == "--help" ]]; then
@@ -67,28 +91,22 @@ if [[ "$1" == "-h" || "$1" == "--help" ]]; then
     exit 0
 fi
 
-# Initialize the screen
+# Initialize the screen and variables
 initialize_screen
+density=${1:-2}
+rain_char=${2:-'|'}  # Treat input as separate characters for multiple raindrops
+color=${3:-'37'}
+speed_range=${4:-2}
 
-# Set variables from command-line arguments
-density=${1:-3}  # Default density is 3
-rain_char=${2-'/'}  # Correctly defaults to *, handling special characters
-color=${3:-'37'}  # Default color blue (34)
-speed_range=${4:-3}  # Default speed range is 3 (1 slowest, 5 fastest)
-
-# Main loop to animate raindrops
-trap "cleanup" SIGINT SIGTERM  # Properly handle user interruption
+# Main animation loop
 while true; do
-    read -t 0.1 -n 1 key
+    # Non-blocking read setup
+    read -s -n 1 -t 0.01 key
     if [[ $key == "q" ]]; then
-        break
+        cleanup
+        exit 0
     fi
-    move_raindrops
+    place_raindrop  # Place new raindrops based on density and characters
+    move_raindrops  # Move existing raindrops
+    sleep 0.01  # Adjust this as necessary for the desired effect
 done
-
-# Function to reset terminal settings on exit
-cleanup() {
-    tput cnorm  # Show cursor
-    clear
-}
-trap cleanup EXIT
