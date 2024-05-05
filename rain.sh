@@ -88,6 +88,7 @@ trap cleanup SIGINT SIGTERM EXIT
 # Check if help is requested
 if [[ "$1" == "-h" || "$1" == "--help" ]]; then
     show_help
+    read
     exit 0
 fi
 
