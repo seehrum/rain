@@ -16,8 +16,9 @@ show_help() {
     echo "  color code  : ANSI color code for the raindrop (default 37 for white)."
     echo "  speed       : Choose speed from 1 (slowest) to 5 (fastest)."
     echo
-    echo "Example: $0 5 '/@|' 32 3"
+    echo "Example: $0 5 '@' 32 3"
     read -p "Press any key to continue..." -n 1 -r  # Wait for user input to continue
+    exit 0
 }
 
 # Function to clear the screen and hide the cursor
@@ -31,18 +32,6 @@ initialize_screen() {
 
 # Declare an associative array to hold the active raindrops
 declare -A raindrops
-
-# Function to place raindrops based on density and characters
-#place_raindrop() {
-#    local chars=("$rain_char") # Quote to handle special characters
-#    for ((i=0; i<density; i++)); do
-#        for ch in "${chars[@]}"; do
-#            local x=$((RANDOM % width))
-#            local speed=$((RANDOM % speed_range + 1))
-#            raindrops["$x,0,$ch"]=$speed  # Store character with its speed at initial position
-#        done
-#    done
-#}
 
 # Function to place raindrops based on density and characters
 place_raindrop() {
@@ -96,7 +85,8 @@ if [[ "$1" == "-h" || "$1" == "--help" ]]; then
     show_help
     exit 0
 elif [[ -n "$1" ]] && (! [[ "$1" =~ ^[0-9]+$ ]] || ! [[ "$3" =~ ^[0-9]+$ ]] || ! [[ "$4" =~ ^[0-9]+$ ]]); then
-    echo "Error: Please provide valid numerical input for density, color code, and speed."
+    echo "Error: Please provide valid numerical input for density, color code, and speed, for more information use $0 -h"
+    read
     exit 1
 fi
 
